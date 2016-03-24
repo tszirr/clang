@@ -1230,7 +1230,7 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
   //   considered for the initialization of the first member of
   //   the subaggregate.
   if (!SemaRef.getLangOpts().OpenCL && 
-      (ElemType->isAggregateType() || ElemType->isVectorType())) {
+      (ElemType->isAggregateType() || ElemType->isVectorType())) { // todo: OCL++
     CheckImplicitInitList(Entity, IList, ElemType, Index, StructuredList,
                           StructuredIndex);
     ++StructuredIndex;
@@ -1429,7 +1429,7 @@ void InitListChecker::CheckVectorType(const InitializedEntity &Entity,
     return;
   }
 
-  if (!SemaRef.getLangOpts().OpenCL) {
+  if (!SemaRef.getLangOpts().OpenCL) { // todo: OCL++
     // If the initializing element is a vector, try to copy-initialize
     // instead of breaking it apart (which is doomed to failure anyway).
     Expr *Init = IList->getInit(Index);
