@@ -1420,7 +1420,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     Opts.OpenCLVersion = 110;
   else if (LangStd == LangStandard::lang_opencl12)
     Opts.OpenCLVersion = 120;
-  else if (LangStd == LangStandard::lang_opencl20)
+  else // if (LangStd == LangStandard::lang_opencl20)
     Opts.OpenCLVersion = 200;
 
   // OpenCL has some additional defaults.
@@ -1506,9 +1506,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
             << A->getAsString(Args) << "C++/ObjC++";
         break;
       case IK_OpenCL:
-        if (!Std.isC99())
-          Diags.Report(diag::err_drv_argument_not_allowed_with)
-            << A->getAsString(Args) << "OpenCL";
+//        if (!Std.isC99())
+//          Diags.Report(diag::err_drv_argument_not_allowed_with)
+//            << A->getAsString(Args) << "OpenCL";
         break;
       case IK_CUDA:
       case IK_PreprocessedCuda:
