@@ -4343,7 +4343,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
       ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                          : ObjCConversion? ICK_Compatible_Conversion
                          : ICK_Identity;
-      ICS.Standard.Third = AddressSpaceConversion ? ICK_Identity : ICK_Qualification;
+      ICS.Standard.Third = AddressSpaceConversion ? ICK_Qualification : ICK_Identity;
       ICS.Standard.FromTypePtr = T2.getAsOpaquePtr();
       ICS.Standard.setToType(0, T2);
       ICS.Standard.setToType(1, T1);
@@ -4401,7 +4401,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
     ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                       : ObjCConversion? ICK_Compatible_Conversion
                       : ICK_Identity;
-    ICS.Standard.Third = AddressSpaceConversion ? ICK_Identity : ICK_Qualification;
+    ICS.Standard.Third = AddressSpaceConversion ? ICK_Qualification : ICK_Identity;
     ICS.Standard.FromTypePtr = T2.getAsOpaquePtr();
     ICS.Standard.setToType(0, T2);
     ICS.Standard.setToType(1, T1);
