@@ -1150,6 +1150,7 @@ TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
   bool DerivedToBase;
   bool ObjCConversion;
   bool ObjCLifetimeConversion;
+  bool AddressSpaceConversion;
   QualType FromType = SrcExpr->getType();
   QualType ToType = R->getPointeeType();
   if (CStyle) {
@@ -1160,7 +1161,8 @@ TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
   if (Self.CompareReferenceRelationship(SrcExpr->getLocStart(),
                                         ToType, FromType,
                                         DerivedToBase, ObjCConversion,
-                                        ObjCLifetimeConversion) 
+                                        ObjCLifetimeConversion,
+                                        AddressSpaceConversion) 
         < Sema::Ref_Compatible_With_Added_Qualification) {
     if (CStyle)
       return TC_NotApplicable;

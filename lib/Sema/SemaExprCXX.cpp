@@ -3224,6 +3224,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   // so that we don't need to recompute anything here.
   QualType FromType = From->getType();
   
+  // OCL++: todo
   if (SCS.CopyConstructor) {
     // FIXME: When can ToType be a reference type?
     assert(!ToType->isReferenceType());
@@ -3602,12 +3603,29 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     break;
 
   case ICK_Qualification: {
+    bool toReference = ToType->isReferenceType();
+    bool toPointer = ToType->isPointerType();
     // The qualification keeps the category of the inner expression, unless the
     // target type isn't a reference.
-    ExprValueKind VK = ToType->isReferenceType() ?
-                                  From->getValueKind() : VK_RValue;
+    ExprValueKind VK = toReference ? From->getValueKind() : VK_RValue;
+
+    CastKind Kind = CK_NoOp;
+    if (toPointer) {
+      unsigned int frAs = FromType->castAs<PointerType>()->getPointeeType().getAddressSpace();
+      unsigned int toAs = ToType->castAs<PointerType>()->getPointeeType().getAddressSpace();
+      if (frAs != toAs)
+        Kind = CK_AddressSpaceConversion;
+    }
+    if (toReference) {
+      unsigned int frAs = FromType->isReferenceType()
+        ? FromType->castAs<ReferenceType>()->getPointeeType().getAddressSpace()
+        : FromType.getAddressSpace();
+      unsigned int toAs = ToType->castAs<ReferenceType>()->getPointeeType().getAddressSpace();
+      if (frAs != toAs)
+        Kind = CK_AddressSpaceConversion;
+    }
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context),
-                             CK_NoOp, VK, /*BasePath=*/nullptr, CCK).get();
+                             Kind, VK, /*BasePath=*/nullptr, CCK).get();
 
     if (SCS.DeprecatedStringLiteralToCharPtr &&
         !getLangOpts().WritableStrings) {
