@@ -3643,10 +3643,10 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
     const ReferenceType *RTy = dyn_cast<ReferenceType>(DestTy);
     QualType ETy = RTy ? RTy->getPointeeType() : DestTy;
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
-    unsigned AS = getContext().getTargetAddressSpace(ETy);
+    unsigned DestAS = getContext().getTargetAddressSpace(ETy);
     LValue LV = EmitLValue(E->getSubExpr());
     llvm::Value* V = Builder.CreateAddrSpaceCast(LV.getPointer(),
-                                                 llvm::PointerType::get(PointeeType, AS));
+                                                 PointeeType->getPointerTo(DestAS));
     return MakeAddrLValue(Address(V, LV.getAlignment()), E->getType(), LV.getAlignmentSource());
   }
   case CK_ObjCObjectLValueCast: {
