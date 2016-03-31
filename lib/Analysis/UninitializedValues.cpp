@@ -278,7 +278,7 @@ static const Expr *stripCasts(ASTContext &C, const Expr *Ex) {
   while (Ex) {
     Ex = Ex->IgnoreParenNoopCasts(C);
     if (const CastExpr *CE = dyn_cast<CastExpr>(Ex)) {
-      if (CE->getCastKind() == CK_LValueBitCast) {
+      if (CE->getCastKind() == CK_LValueBitCast || CE->getCastKind() == CK_LValueAddressSpaceCast) {
         Ex = CE->getSubExpr();
         continue;
       }

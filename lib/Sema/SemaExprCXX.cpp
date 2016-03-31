@@ -3622,7 +3622,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
         : FromType.getAddressSpace();
       unsigned int toAs = ToType->castAs<ReferenceType>()->getPointeeType().getAddressSpace();
       if (frAs != toAs)
-        Kind = CK_AddressSpaceConversion;
+        Kind = CK_LValueAddressSpaceCast;
     }
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context),
                              Kind, VK, /*BasePath=*/nullptr, CCK).get();

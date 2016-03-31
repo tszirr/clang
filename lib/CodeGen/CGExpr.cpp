@@ -3638,6 +3638,12 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
 
     return MakeAddrLValue(V, E->getType(), LV.getAlignmentSource());
   }
+  case CK_LValueAddressSpaceCast: {
+    LValue LV = EmitLValue(E->getSubExpr());
+    llvm::Value* V = Builder.CreateAddrSpaceCast(LV.getPointer(),
+                                                 ConvertType(E->getType()));
+    return MakeAddrLValue(Address(V, LV.getAlignment()), E->getType(), LV.getAlignmentSource());
+  }
   case CK_ObjCObjectLValueCast: {
     LValue LV = EmitLValue(E->getSubExpr());
     Address V = Builder.CreateElementBitCast(LV.getAddress(),

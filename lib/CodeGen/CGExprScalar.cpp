@@ -1386,6 +1386,18 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     return EmitLoadOfLValue(LV, CE->getExprLoc());
   }
 
+  case CK_LValueAddressSpaceCast: {
+    const ReferenceType *RTy = dyn_cast<ReferenceType>(DestTy);
+    QualType ETy = RTy ? RTy->getPointeeType() : DestTy;
+    llvm::Type *PointeeType = CGF.ConvertTypeForMem(ETy);
+    unsigned AS = CGF.getContext().getTargetAddressSpace(ETy);
+    LValue LV = EmitLValue(E);
+    llvm::Value* V = Builder.CreateAddrSpaceCast(LV.getPointer(),
+                                                 llvm::PointerType::get(PointeeType, AS));
+	LValue CLV = CGF.MakeAddrLValue(Address(V, LV.getAlignment()), DestTy, LV.getAlignmentSource());
+    return EmitLoadOfLValue(CLV, CE->getExprLoc());
+  }
+
   case CK_CPointerToObjCPointerCast:
   case CK_BlockPointerToObjCPointerCast:
   case CK_AnyPointerToBlockPointerCast:
