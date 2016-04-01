@@ -155,6 +155,7 @@ namespace {
 // %2: Destination Type
 static TryCastResult TryLValueToRValueCast(Sema &Self, Expr *SrcExpr,
                                            QualType DestType, bool CStyle,
+                                           SourceRange OpRange,
                                            CastKind &Kind,
                                            CXXCastPath &BasePath,
                                            unsigned &msg);
@@ -418,6 +419,25 @@ static void diagnoseBadCast(Sema &S, unsigned msg, CastType castType,
   }
 }
 
+// DiagForbiddenQualifierCast - Returns true, if qualification cast forbidden,
+// both implicitly and explicitly.
+static bool DiagForbiddenQualificationCasts(Sema& Self, SourceLocation loc,
+                                            QualType SrcType, QualType DestType,
+                                            SourceRange srcExprRng) {
+  bool CastForbidden = false;
+  // Non-overlapping address spaces
+  Qualifiers SrcQual = SrcType.getQualifiers();
+  Qualifiers DestQual = DestType.getQualifiers();
+  if (!DestQual.isAddressSpaceSupersetOf(SrcQual) &&
+      !SrcQual.isAddressSpaceSupersetOf(DestQual)) {
+    Self.Diag(loc, diag::err_typecheck_incompatible_address_space)
+        << SrcType << DestType << Sema::AA_Casting
+        << srcExprRng;
+    CastForbidden = true;
+  }
+  return CastForbidden;
+}
+
 // AddImplicitAddressSpaceCastIfNecessary - Adds an implicit address space conversion
 // needed for an explicit casts, if required. Merges with No-Op kinds of the original
 // cast, if possible. Otherwise replaces From with an implicit cast expression that
@@ -537,8 +557,8 @@ CastsAwayConstness(Sema &Self, QualType SrcType, QualType DestType,
                    Qualifiers *CastAwayQualifiers = nullptr) {
   // If the only checking we care about is for Objective-C lifetime qualifiers,
   // and we're not in ObjC mode, there's nothing to check.
-  if (!CheckCVR && CheckObjCLifetime && 
-      !Self.Context.getLangOpts().ObjC1)
+  if (!CheckCVR && !Self.Context.getLangOpts().OpenCL &&
+      CheckObjCLifetime && !Self.Context.getLangOpts().ObjC1)
     return false;
     
   // Casting away constness is defined in C++ 5.2.11p8 with reference to
@@ -1031,8 +1051,8 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
   // C++11 [expr.static.cast]p3: 
   //   A glvalue of type "cv1 T1" can be cast to type "rvalue reference to cv2
   //   T2" if "cv2 T2" is reference-compatible with "cv1 T1".
-  tcr = TryLValueToRValueCast(Self, SrcExpr.get(), DestType, CStyle, Kind, 
-                              BasePath, msg);
+  tcr = TryLValueToRValueCast(Self, SrcExpr.get(), DestType, CStyle, OpRange,
+                              Kind, BasePath, msg);
   if (tcr != TC_NotApplicable)
     return tcr;
 
@@ -1118,9 +1138,9 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
           // This is definitely the intended conversion, but it might fail due
           // to a qualifier violation. Note that we permit Objective-C lifetime
           // and GC qualifier mismatches here.
-          Qualifiers DestPointeeQuals = DestPointee.getQualifiers();
-          Qualifiers SrcPointeeQuals = SrcPointee.getQualifiers();
           if (!CStyle) {
+            Qualifiers DestPointeeQuals = DestPointee.getQualifiers();
+            Qualifiers SrcPointeeQuals = SrcPointee.getQualifiers();
             DestPointeeQuals.removeObjCGCAttr();
             DestPointeeQuals.removeObjCLifetime();
             SrcPointeeQuals.removeObjCGCAttr();
@@ -1131,9 +1151,10 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
               return TC_Failed;
             }
           }
-          else if (!DestPointeeQuals.isAddressSpaceSupersetOf(SrcPointeeQuals) &&
-                   !SrcPointeeQuals.isAddressSpaceSupersetOf(DestPointeeQuals)) {
-            msg = diag::err_bad_cxx_cast_qualifiers_away;
+          else if (DiagForbiddenQualificationCasts(Self, OpRange.getBegin(),
+                                                   SrcPointee, DestPointee,
+                                                   SrcExpr.get()->getSourceRange())) {
+            msg = 0;
             return TC_Failed;
           }
           Kind = CK_BitCast;
@@ -1189,7 +1210,8 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
 /// Tests whether a conversion according to N2844 is valid.
 TryCastResult
 TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
-                      bool CStyle, CastKind &Kind, CXXCastPath &BasePath, 
+                      bool CStyle, SourceRange OpRange,
+                      CastKind &Kind, CXXCastPath &BasePath, 
                       unsigned &msg) {
   // C++11 [expr.static.cast]p3:
   //   A glvalue of type "cv1 T1" can be cast to type "rvalue reference to 
@@ -1211,11 +1233,14 @@ TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
   QualType FromType = SrcExpr->getType();
   QualType ToType = R->getPointeeType();
   if (CStyle) {
-    if (ToType.getQualifiers().isAddressSpaceSupersetOf(FromType.getQualifiers()) ||
-        FromType.getQualifiers().isAddressSpaceSupersetOf(ToType.getQualifiers())) {
-      FromType = FromType.getUnqualifiedType();
-      ToType = ToType.getUnqualifiedType();
+    if (DiagForbiddenQualificationCasts(Self, OpRange.getBegin(),
+                                        FromType, ToType,
+                                        SrcExpr->getSourceRange())) {
+      msg = 0;
+      return TC_Failed;
     }
+    FromType = FromType.getUnqualifiedType();
+    ToType = ToType.getUnqualifiedType();
   }
   
   if (Self.CompareReferenceRelationship(SrcExpr->getLocStart(),
@@ -1358,11 +1383,13 @@ TryStaticDowncast(Sema &Self, CanQualType SrcType, CanQualType DestType,
   // FIXME: Being 100% compliant here would be nice to have.
 
   // Must preserve cv, as always, unless we're in C-style mode.
-  if (CStyle
-      ? !DestType.getQualifiers().isAddressSpaceSupersetOf(SrcType.getQualifiers()) &&
-        !SrcType.getQualifiers().isAddressSpaceSupersetOf(DestType.getQualifiers())
-      : !DestType.isAtLeastAsQualifiedAs(SrcType)) {
+  if (!CStyle && !DestType.isAtLeastAsQualifiedAs(SrcType)) {
     msg = diag::err_bad_cxx_cast_qualifiers_away;
+    return TC_Failed;
+  } else if (CStyle &&
+             DiagForbiddenQualificationCasts(Self, OpRange.getBegin(),
+                                             SrcType, DestType, OpRange)) {
+    msg = 0;
     return TC_Failed;
   }
 
@@ -2072,15 +2099,8 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     // more stringent.
     return TC_NotApplicable;
   }
-
-  // C++ 5.2.10p2: The reinterpret_cast operator shall not cast away constness.
-  // The C-style cast operator can.
-  if (CastsAwayConstness(Self, SrcType, DestType, /*CheckCVR=*/!CStyle,
-                         /*CheckObjCLifetime=*/CStyle)) {
-    msg = diag::err_bad_cxx_cast_qualifiers_away;
-    return TC_Failed;
-  }
   
+  // Allow address space downcasts using reinterpret_cast
   const PointerType* DestPtr = DestType->getAs<PointerType>();
   const PointerType* SrcPtr = SrcType->getAs<PointerType>();
   if (DestPtr && SrcPtr && !DestPtr->isAddressSpaceOverlapping(*SrcPtr)) {
@@ -2092,6 +2112,14 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     return TC_Failed;
   }
 
+  // C++ 5.2.10p2: The reinterpret_cast operator shall not cast away constness.
+  // The C-style cast operator can.
+  if (CastsAwayConstness(Self, SrcType, DestType, /*CheckCVR=*/!CStyle,
+                         /*CheckObjCLifetime=*/CStyle)) {
+    msg = diag::err_bad_cxx_cast_qualifiers_away;
+    return TC_Failed;
+  }
+  
   // Cannot convert between block pointers and Objective-C object pointers.
   if ((SrcType->isBlockPointerType() && DestType->isObjCObjectPointerType()) ||
       (DestType->isBlockPointerType() && SrcType->isObjCObjectPointerType()))
