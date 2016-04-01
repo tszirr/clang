@@ -3720,10 +3720,10 @@ static void TryReferenceListInitialization(Sema &S,
       return;
 
     SourceLocation DeclLoc = Initializer->getLocStart();
-    bool dummy1, dummy2, dummy3, dummy4;
+    bool dummy1, dummy2, dummy3, AddressSpaceConversion;
     Sema::ReferenceCompareResult RefRelationship
       = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, dummy1,
-                                       dummy2, dummy3, dummy4);
+                                       dummy2, dummy3, AddressSpaceConversion);
     if (RefRelationship >= Sema::Ref_Related) {
       // Try to bind the reference here.
       TryReferenceInitializationCore(S, Entity, Kind, Initializer, cv1T1, T1,
@@ -4194,6 +4194,12 @@ static void TryReferenceInitializationCore(Sema &S,
     = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, DerivedToBase,
                                      ObjCConversion, ObjCLifetimeConversion,
                                      AddressSpaceConversion);
+  
+  // Bit mask comparison no good for address spaces
+  if (AddressSpaceConversion && !T1Quals.isAddressSpaceSupersetOf(T2Quals)) {
+    Sequence.SetFailed(InitializationSequence::FK_ConversionFailed);
+    return;
+  }
 
   // C++0x [dcl.init.ref]p5:
   //   A reference to type "cv1 T1" is initialized by an expression of type
