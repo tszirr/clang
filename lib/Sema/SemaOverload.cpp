@@ -2956,7 +2956,9 @@ Sema::IsQualificationConversion(QualType FromType, QualType ToType,
     
     //   -- for every j > 0, if const is in cv 1,j then const is in cv
     //      2,j, and similarly for volatile.
-    if (!CStyle && !ToQuals.compatiblyIncludes(FromQuals))
+    if (CStyle
+        ? !ToQuals.isAddressSpaceSupersetOf(FromQuals) && !FromQuals.isAddressSpaceSupersetOf(ToQuals)
+        : !ToQuals.compatiblyIncludes(FromQuals))
       return false;
 
     //   -- if the cv 1,j and cv 2,j are different, then const is in
