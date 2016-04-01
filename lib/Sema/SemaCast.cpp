@@ -2070,6 +2070,17 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     return TC_Failed;
   }
   
+  const PointerType* DestPtr = DestType->getAs<PointerType>();
+  const PointerType* SrcPtr = SrcType->getAs<PointerType>();
+  if (DestPtr && SrcPtr && !DestPtr->isAddressSpaceOverlapping(*SrcPtr)) {
+    Self.Diag(OpRange.getBegin(),
+              diag::err_typecheck_incompatible_address_space)
+        << SrcType << DestType << Sema::AA_Casting
+        << SrcExpr.get()->getSourceRange();
+    msg = 0; SrcExpr = ExprError();
+    return TC_Failed;
+  }
+
   // Cannot convert between block pointers and Objective-C object pointers.
   if ((SrcType->isBlockPointerType() && DestType->isObjCObjectPointerType()) ||
       (DestType->isBlockPointerType() && SrcType->isObjCObjectPointerType()))
