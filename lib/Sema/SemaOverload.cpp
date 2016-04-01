@@ -4140,8 +4140,7 @@ Sema::CompareReferenceRelationship(SourceLocation Loc,
     T2Quals.removeObjCLifetime();    
   }
 
-  if (T1Quals.getAddressSpace() != T2Quals.getAddressSpace() &&
-    T1Quals.isAddressSpaceSupersetOf(T2Quals)) {
+  if (T1Quals.getAddressSpace() != T2Quals.getAddressSpace()) {
     AddressSpaceConversion = true;
   }
 

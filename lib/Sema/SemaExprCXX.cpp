@@ -3224,7 +3224,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   // so that we don't need to recompute anything here.
   QualType FromType = From->getType();
   
-  // OCL++: todo
   if (SCS.CopyConstructor) {
     // FIXME: When can ToType be a reference type?
     assert(!ToType->isReferenceType());
