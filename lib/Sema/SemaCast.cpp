@@ -1118,9 +1118,9 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
           // This is definitely the intended conversion, but it might fail due
           // to a qualifier violation. Note that we permit Objective-C lifetime
           // and GC qualifier mismatches here.
+          Qualifiers DestPointeeQuals = DestPointee.getQualifiers();
+          Qualifiers SrcPointeeQuals = SrcPointee.getQualifiers();
           if (!CStyle) {
-            Qualifiers DestPointeeQuals = DestPointee.getQualifiers();
-            Qualifiers SrcPointeeQuals = SrcPointee.getQualifiers();
             DestPointeeQuals.removeObjCGCAttr();
             DestPointeeQuals.removeObjCLifetime();
             SrcPointeeQuals.removeObjCGCAttr();
@@ -1130,6 +1130,11 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
               msg = diag::err_bad_cxx_cast_qualifiers_away;
               return TC_Failed;
             }
+          }
+          else if (!DestPointeeQuals.isAddressSpaceSupersetOf(SrcPointeeQuals) &&
+                   !SrcPointeeQuals.isAddressSpaceSupersetOf(DestPointeeQuals)) {
+            msg = diag::err_bad_cxx_cast_qualifiers_away;
+            return TC_Failed;
           }
           Kind = CK_BitCast;
           return TC_Success;
@@ -1206,8 +1211,11 @@ TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
   QualType FromType = SrcExpr->getType();
   QualType ToType = R->getPointeeType();
   if (CStyle) {
-    FromType = FromType.getUnqualifiedType();
-    ToType = ToType.getUnqualifiedType();
+    if (ToType.getQualifiers().isAddressSpaceSupersetOf(FromType.getQualifiers()) ||
+        FromType.getQualifiers().isAddressSpaceSupersetOf(ToType.getQualifiers())) {
+      FromType = FromType.getUnqualifiedType();
+      ToType = ToType.getUnqualifiedType();
+    }
   }
   
   if (Self.CompareReferenceRelationship(SrcExpr->getLocStart(),
@@ -1350,7 +1358,10 @@ TryStaticDowncast(Sema &Self, CanQualType SrcType, CanQualType DestType,
   // FIXME: Being 100% compliant here would be nice to have.
 
   // Must preserve cv, as always, unless we're in C-style mode.
-  if (!CStyle && !DestType.isAtLeastAsQualifiedAs(SrcType)) {
+  if (CStyle
+      ? !DestType.getQualifiers().isAddressSpaceSupersetOf(SrcType.getQualifiers()) &&
+        !SrcType.getQualifiers().isAddressSpaceSupersetOf(DestType.getQualifiers())
+      : !DestType.isAtLeastAsQualifiedAs(SrcType)) {
     msg = diag::err_bad_cxx_cast_qualifiers_away;
     return TC_Failed;
   }
