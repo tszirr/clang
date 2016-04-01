@@ -418,6 +418,53 @@ static void diagnoseBadCast(Sema &S, unsigned msg, CastType castType,
   }
 }
 
+// AddImplicitAddressSpaceCastIfNecessary - Adds an implicit address space conversion
+// needed for an explicit casts, if required. Merges with No-Op kinds of the original
+// cast, if possible. Otherwise replaces From with an implicit cast expression that
+// converts its type to the same address space as ToType.
+static void AddImplicitAddressSpaceCastIfNecessary(Sema& Self, ExprResult& From, QualType ToType, CastKind& OriginalKind) {
+  bool toReference = ToType->isReferenceType();
+  bool toPointer = ToType->isPointerType();
+
+  if (!toReference && !toPointer)
+      return;
+
+  QualType FromType = From.get()->getType();
+  CastKind Kind = CK_NoOp;
+  QualType NewAddressType = FromType;
+  if (toPointer) {
+    QualType frPointee = FromType->castAs<PointerType>()->getPointeeType();
+    unsigned int frAs = FromType->castAs<PointerType>()->getPointeeType().getAddressSpace();
+    unsigned int toAs = ToType->castAs<PointerType>()->getPointeeType().getAddressSpace();
+    if (frAs != toAs) {
+      Kind = CK_AddressSpaceConversion;
+      QualifierCollector qc;
+      const Type* frPointeeUQ = qc.strip(frPointee);
+      qc.setAddressSpace(toAs);
+      NewAddressType = Self.Context.getPointerType(Self.Context.getQualifiedType(frPointeeUQ, qc));
+    }
+  }
+  if (toReference) {
+    unsigned int frAs = FromType.getAddressSpace();
+    unsigned int toAs = ToType->castAs<ReferenceType>()->getPointeeType().getAddressSpace();
+    if (frAs != toAs) {
+      Kind = CK_LValueAddressSpaceCast;
+      QualifierCollector qc;
+      const Type* frUQ = qc.strip(FromType);
+      qc.setAddressSpace(toAs);
+      NewAddressType = Self.Context.getQualifiedType(frUQ, qc);
+    }
+  }
+  if (Kind != CK_NoOp) {
+    if (OriginalKind == CK_NoOp)
+      OriginalKind = Kind;
+    else {
+      From = Self.ImpCastExprToType(From.get(), NewAddressType,
+                                    Kind, From.get()->getValueKind(), /*BasePath=*/nullptr).get();
+    }
+  }
+}
+
 /// UnwrapDissimilarPointerTypes - Like Sema::UnwrapSimilarPointerTypes,
 /// this removes one level of indirection from both types, provided that they're
 /// the same kind of pointer (plain or to-member). Unlike the Sema function,
@@ -678,6 +725,7 @@ void CastOperation::CheckDynamicCast() {
   //   [except for cv].
   if (DestRecord == SrcRecord) {
     Kind = CK_NoOp;
+    AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
     return;
   }
 
@@ -693,6 +741,7 @@ void CastOperation::CheckDynamicCast() {
     }
 
     Kind = CK_DerivedToBase;
+    AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
     return;
   }
 
@@ -716,6 +765,7 @@ void CastOperation::CheckDynamicCast() {
 
   // Done. Everything else is run-time checks.
   Kind = CK_Dynamic;
+  AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
 }
 
 /// CheckConstCast - Check that a const_cast\<DestType\>(SrcExpr) is valid.
@@ -867,6 +917,7 @@ void CastOperation::CheckReinterpretCast() {
     }
     SrcExpr = ExprError();
   } else if (tcr == TC_Success) {
+    AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
     if (Self.getLangOpts().ObjCAutoRefCount)
       checkObjCARCConversion(Sema::CCK_OtherCast);
     DiagnoseReinterpretUpDownCast(Self, SrcExpr.get(), DestType, OpRange);
@@ -929,6 +980,7 @@ void CastOperation::CheckStaticCast() {
     }
     SrcExpr = ExprError();
   } else if (tcr == TC_Success) {
+    AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
     if (Kind == CK_BitCast)
       checkCastAlign();
     if (Self.getLangOpts().ObjCAutoRefCount)
@@ -2183,8 +2235,11 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
     }
   }
 
-  if (Self.getLangOpts().ObjCAutoRefCount && tcr == TC_Success)
-    checkObjCARCConversion(CCK);
+  if (tcr == TC_Success) {
+    AddImplicitAddressSpaceCastIfNecessary(Self, SrcExpr, DestType, Kind);
+    if (Self.getLangOpts().ObjCAutoRefCount)
+      checkObjCARCConversion(CCK);
+  }
 
   if (tcr != TC_Success && msg != 0) {
     if (SrcExpr.get()->getType() == Self.Context.OverloadTy) {
