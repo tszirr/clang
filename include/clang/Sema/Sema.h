@@ -8689,7 +8689,8 @@ public:
                                                       QualType T1, QualType T2,
                                                       bool &DerivedToBase,
                                                       bool &ObjCConversion,
-                                                bool &ObjCLifetimeConversion);
+                                                      bool &ObjCLifetimeConversion,
+                                                      bool &AddressSpaceConversion);
 
   ExprResult checkUnknownAnyCast(SourceRange TypeRange, QualType CastType,
                                  Expr *CastExpr, CastKind &CastKind,

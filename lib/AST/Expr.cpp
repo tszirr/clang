@@ -1585,6 +1585,7 @@ bool CastExpr::CastConsistency() const {
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
 
+  case CK_LValueAddressSpaceCast:
   case CK_Dependent:
   case CK_LValueToRValue:
   case CK_NoOp:
@@ -1614,6 +1615,8 @@ const char *CastExpr::getCastKindName() const {
     return "BitCast";
   case CK_LValueBitCast:
     return "LValueBitCast";
+  case CK_LValueAddressSpaceCast:
+    return "LValueAddressSpaceCast";
   case CK_LValueToRValue:
     return "LValueToRValue";
   case CK_NoOp:

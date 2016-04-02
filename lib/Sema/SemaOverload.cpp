@@ -2954,6 +2954,13 @@ Sema::IsQualificationConversion(QualType FromType, QualType ToType,
       ToQuals.removeObjCGCAttr();
     }
     
+    // Only check for invalid C-style address space casts here, implicit
+    // AS compatibility handled by 'compatiblyIncludes' right below
+    if (CStyle &&
+        !ToQuals.isAddressSpaceSupersetOf(FromQuals) &&
+        !FromQuals.isAddressSpaceSupersetOf(ToQuals))
+      return false;
+
     //   -- for every j > 0, if const is in cv 1,j then const is in cv
     //      2,j, and similarly for volatile.
     if (!CStyle && !ToQuals.compatiblyIncludes(FromQuals))
@@ -4076,7 +4083,8 @@ Sema::CompareReferenceRelationship(SourceLocation Loc,
                                    QualType OrigT1, QualType OrigT2,
                                    bool &DerivedToBase,
                                    bool &ObjCConversion,
-                                   bool &ObjCLifetimeConversion) {
+                                   bool &ObjCLifetimeConversion,
+                                   bool &AddressSpaceConversion) {
   assert(!OrigT1->isReferenceType() &&
     "T1 must be the pointee type of the reference type");
   assert(!OrigT2->isReferenceType() && "T2 cannot be a reference type");
@@ -4094,6 +4102,7 @@ Sema::CompareReferenceRelationship(SourceLocation Loc,
   DerivedToBase = false;
   ObjCConversion = false;
   ObjCLifetimeConversion = false;
+  AddressSpaceConversion = false;
   if (UnqualT1 == UnqualT2) {
     // Nothing to do.
   } else if (isCompleteType(Loc, OrigT2) &&
@@ -4137,7 +4146,11 @@ Sema::CompareReferenceRelationship(SourceLocation Loc,
     T1Quals.removeObjCLifetime();
     T2Quals.removeObjCLifetime();    
   }
-    
+
+  if (T1Quals.getAddressSpace() != T2Quals.getAddressSpace()) {
+    AddressSpaceConversion = true;
+  }
+
   if (T1Quals == T2Quals)
     return Ref_Compatible;
   else if (T1Quals.compatiblyIncludes(T2Quals))
@@ -4182,6 +4195,7 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
       bool DerivedToBase = false;
       bool ObjCConversion = false;
       bool ObjCLifetimeConversion = false;
+      bool AddressSpaceConversion = false;
       
       // If we are initializing an rvalue reference, don't permit conversion
       // functions that return lvalues.
@@ -4198,8 +4212,8 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
             Conv->getConversionType().getNonReferenceType()
               .getUnqualifiedType(),
             DeclType.getNonReferenceType().getUnqualifiedType(),
-            DerivedToBase, ObjCConversion, ObjCLifetimeConversion) ==
-          Sema::Ref_Incompatible)
+            DerivedToBase, ObjCConversion, ObjCLifetimeConversion,
+            AddressSpaceConversion) == Sema::Ref_Incompatible)
         continue;
     } else {
       // If the conversion function doesn't return a reference type,
@@ -4303,10 +4317,12 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
   bool DerivedToBase = false;
   bool ObjCConversion = false;
   bool ObjCLifetimeConversion = false;
+  bool AddressSpaceConversion = false;
   Expr::Classification InitCategory = Init->Classify(S.Context);
   Sema::ReferenceCompareResult RefRelationship
     = S.CompareReferenceRelationship(DeclLoc, T1, T2, DerivedToBase,
-                                     ObjCConversion, ObjCLifetimeConversion);
+                                     ObjCConversion, ObjCLifetimeConversion,
+                                     AddressSpaceConversion);
 
 
   // C++0x [dcl.init.ref]p5:
@@ -4333,7 +4349,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
       ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                          : ObjCConversion? ICK_Compatible_Conversion
                          : ICK_Identity;
-      ICS.Standard.Third = ICK_Identity;
+      ICS.Standard.Third = AddressSpaceConversion ? ICK_Qualification : ICK_Identity;
       ICS.Standard.FromTypePtr = T2.getAsOpaquePtr();
       ICS.Standard.setToType(0, T2);
       ICS.Standard.setToType(1, T1);
@@ -4391,7 +4407,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
     ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                       : ObjCConversion? ICK_Compatible_Conversion
                       : ICK_Identity;
-    ICS.Standard.Third = ICK_Identity;
+    ICS.Standard.Third = AddressSpaceConversion ? ICK_Qualification : ICK_Identity;
     ICS.Standard.FromTypePtr = T2.getAsOpaquePtr();
     ICS.Standard.setToType(0, T2);
     ICS.Standard.setToType(1, T1);
@@ -4731,9 +4747,10 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
       bool dummy1 = false;
       bool dummy2 = false;
       bool dummy3 = false;
+      bool dummy4 = false;
       Sema::ReferenceCompareResult RefRelationship
         = S.CompareReferenceRelationship(From->getLocStart(), T1, T2, dummy1,
-                                         dummy2, dummy3);
+                                         dummy2, dummy3, dummy4);
 
       if (RefRelationship >= Sema::Ref_Related) {
         return TryReferenceInit(S, Init, ToType, /*FIXME*/From->getLocStart(),
