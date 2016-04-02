@@ -703,6 +703,7 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
     break;
       
   case CK_LValueBitCast:
+  case CK_LValueAddressSpaceCast:
     llvm_unreachable("should not be emitting lvalue bitcast as rvalue");
 
   case CK_Dependent:

@@ -4363,6 +4363,7 @@ public:
 
     case CK_NoOp:
     case CK_UserDefinedConversion:
+    case CK_LValueAddressSpaceCast: // FIXME: assumes address space ignored everywhere?
       return StmtVisitorTy::Visit(E->getSubExpr());
 
     case CK_LValueToRValue: {
@@ -7922,6 +7923,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_LValueToRValue:
   case CK_AtomicToNonAtomic:
   case CK_NoOp:
+  case CK_LValueAddressSpaceCast:
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
 
   case CK_MemberPointerToBoolean:
@@ -8402,6 +8404,7 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_LValueToRValue:
   case CK_AtomicToNonAtomic:
   case CK_NoOp:
+  case CK_LValueAddressSpaceCast:
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
 
   case CK_Dependent:

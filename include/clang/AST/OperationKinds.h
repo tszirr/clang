@@ -46,6 +46,9 @@ enum CastKind {
   /// reinterpret_casts of l-value expressions to reference types.
   ///    bool b; reinterpret_cast<char&>(b) = 'a';
   CK_LValueBitCast,
+
+  // Convert a reference to a different address space.
+  CK_LValueAddressSpaceCast,
   
   /// CK_LValueToRValue - A conversion which causes the extraction of
   /// an r-value from the operand gl-value.  The result of an r-value
