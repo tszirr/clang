@@ -6571,19 +6571,19 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
 	  !hasOpenCLAddressSpace && type.getAddressSpace() == 0 &&
 	  (TAL == TAL_DeclSpec || TAL == TAL_DeclChunk)) {
 	Declarator &D = state.getDeclarator();
-	if (state.getCurrentChunkIndex() > 0) {
-	  int LastKind = static_cast<int>( D.getTypeObject(state.getCurrentChunkIndex() - 1).Kind );
-	  if (LastKind == DeclaratorChunk::Pointer || LastKind == DeclaratorChunk::Reference) {
-		type = state.getSema().Context.getAddrSpaceQualType(
-			type, LangAS::opencl_generic);
-	  }
-	} else if (D.getContext() == Declarator::FileContext &&
+    if (state.getCurrentChunkIndex() > 0) {
+      int LastKind = static_cast<int>( D.getTypeObject(state.getCurrentChunkIndex() - 1).Kind );
+      if (LastKind == DeclaratorChunk::Pointer || LastKind == DeclaratorChunk::Reference) {
+        type = state.getSema().Context.getAddrSpaceQualType(
+            type, LangAS::opencl_generic);
+      }
+    } else if (D.getContext() == Declarator::FileContext &&
 			   !D.isFunctionDeclarator() && !D.isFunctionDefinition() &&
 			   D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_typedef &&
 			   !type->isSamplerT())
 	  type = state.getSema().Context.getAddrSpaceQualType(
 		  type, LangAS::opencl_global);
-	else if (D.getContext() == Declarator::BlockContext &&
+    else if (D.getContext() == Declarator::BlockContext &&
 			 D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static)
 	  type = state.getSema().Context.getAddrSpaceQualType(
 		  type, LangAS::opencl_global);

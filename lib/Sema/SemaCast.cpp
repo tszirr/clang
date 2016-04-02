@@ -1211,7 +1211,7 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
 TryCastResult
 TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
                       bool CStyle, SourceRange OpRange,
-                      CastKind &Kind, CXXCastPath &BasePath, 
+                      CastKind &Kind, CXXCastPath &BasePath,
                       unsigned &msg) {
   // C++11 [expr.static.cast]p3:
   //   A glvalue of type "cv1 T1" can be cast to type "rvalue reference to 
@@ -1247,7 +1247,7 @@ TryLValueToRValueCast(Sema &Self, Expr *SrcExpr, QualType DestType,
                                         ToType, FromType,
                                         DerivedToBase, ObjCConversion,
                                         ObjCLifetimeConversion,
-                                        AddressSpaceConversion) 
+                                        AddressSpaceConversion)
         < Sema::Ref_Compatible_With_Added_Qualification) {
     if (CStyle)
       return TC_NotApplicable;

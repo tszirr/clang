@@ -6567,7 +6567,7 @@ InitializationSequence::Perform(Sema &S,
               (Step->Kind == SK_QualificationConversionXValue ?
                    VK_XValue :
                    VK_RValue);
-	  QualType FromType = CurInit.get()->getType();
+      QualType FromType = CurInit.get()->getType();
       CastKind Kind = CK_NoOp;
       unsigned int frAs = FromType->isReferenceType()
         ? FromType->castAs<ReferenceType>()->getPointeeType().getAddressSpace()
@@ -6576,7 +6576,7 @@ InitializationSequence::Perform(Sema &S,
         ? Step->Type->castAs<ReferenceType>()->getPointeeType().getAddressSpace()
         : Step->Type.getAddressSpace();
 
-	  if (frAs != toAs)
+      if (frAs != toAs)
         Kind = CK_LValueAddressSpaceCast;
       CurInit = S.ImpCastExprToType(CurInit.get(), Step->Type, Kind, VK);
       break;
