@@ -3720,10 +3720,10 @@ static void TryReferenceListInitialization(Sema &S,
       return;
 
     SourceLocation DeclLoc = Initializer->getLocStart();
-    bool dummy1, dummy2, dummy3;
+    bool dummy1, dummy2, dummy3, AddressSpaceConversion;
     Sema::ReferenceCompareResult RefRelationship
       = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, dummy1,
-                                       dummy2, dummy3);
+                                       dummy2, dummy3, AddressSpaceConversion);
     if (RefRelationship >= Sema::Ref_Related) {
       // Try to bind the reference here.
       TryReferenceInitializationCore(S, Entity, Kind, Initializer, cv1T1, T1,
@@ -4056,11 +4056,13 @@ static OverloadingResult TryRefInitWithConversionFunction(Sema &S,
   bool NewDerivedToBase = false;
   bool NewObjCConversion = false;
   bool NewObjCLifetimeConversion = false;
+  bool NewAddressSpaceConversion = false;
   Sema::ReferenceCompareResult NewRefRelationship
     = S.CompareReferenceRelationship(DeclLoc, T1,
                                      T2.getNonLValueExprType(S.Context),
                                      NewDerivedToBase, NewObjCConversion,
-                                     NewObjCLifetimeConversion);
+                                     NewObjCLifetimeConversion,
+                                     NewAddressSpaceConversion);
   if (NewRefRelationship == Sema::Ref_Incompatible) {
     // If the type we've converted to is not reference-related to the
     // type we're looking for, then there is another conversion step
@@ -4186,10 +4188,18 @@ static void TryReferenceInitializationCore(Sema &S,
   bool DerivedToBase = false;
   bool ObjCConversion = false;
   bool ObjCLifetimeConversion = false;
+  bool AddressSpaceConversion = false;
   Expr::Classification InitCategory = Initializer->Classify(S.Context);
   Sema::ReferenceCompareResult RefRelationship
     = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, DerivedToBase,
-                                     ObjCConversion, ObjCLifetimeConversion);
+                                     ObjCConversion, ObjCLifetimeConversion,
+                                     AddressSpaceConversion);
+  
+  // Bit mask comparison no good for address spaces
+  if (AddressSpaceConversion && !T1Quals.isAddressSpaceSupersetOf(T2Quals)) {
+    Sequence.SetFailed(InitializationSequence::FK_ConversionFailed);
+    return;
+  }
 
   // C++0x [dcl.init.ref]p5:
   //   A reference to type "cv1 T1" is initialized by an expression of type
@@ -6557,7 +6567,18 @@ InitializationSequence::Perform(Sema &S,
               (Step->Kind == SK_QualificationConversionXValue ?
                    VK_XValue :
                    VK_RValue);
-      CurInit = S.ImpCastExprToType(CurInit.get(), Step->Type, CK_NoOp, VK);
+      QualType FromType = CurInit.get()->getType();
+      CastKind Kind = CK_NoOp;
+      unsigned int frAs = FromType->isReferenceType()
+        ? FromType->castAs<ReferenceType>()->getPointeeType().getAddressSpace()
+        : FromType.getAddressSpace();
+      unsigned int toAs = Step->Type->isReferenceType()
+        ? Step->Type->castAs<ReferenceType>()->getPointeeType().getAddressSpace()
+        : Step->Type.getAddressSpace();
+
+      if (frAs != toAs)
+        Kind = CK_LValueAddressSpaceCast;
+      CurInit = S.ImpCastExprToType(CurInit.get(), Step->Type, Kind, VK);
       break;
     }
 
